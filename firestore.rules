@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Game state: anyone can read (players need to see questions/phase),
+    // anyone can create/update (the host device writes this — there's no
+    // auth layer in this app, so this is "anyone with the code can host").
+    match /games/{gameCode} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+
+      // Each player only ever needs to write their OWN player doc.
+      // We can't strictly enforce "only their own doc" without auth,
+      // but scoping writes to this subpath keeps things contained.
+      match /players/{playerId} {
+        allow read: if true;
+        allow create, update: if true;
+        allow delete: if false;
+      }
+    }
+  }
+}
+
+// NOTE: These rules are intentionally open (no login required) so a
+// team can jump in fast. That means anyone with your app's URL could
+// technically write bogus data. For an internal team tool this is
+// usually an acceptable trade-off. If you want tighter security later,
+// add Firebase Anonymous Auth and scope player writes to
+// request.auth.uid == playerId.
