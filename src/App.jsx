@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Clock,
   Image as ImageIcon,
+  X,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { db } from "./firebase";
@@ -219,11 +220,21 @@ function HostApp({ onExit }) {
     setStage("question");
   }
 
+  async function cancelGame() {
+    if (!window.confirm("Cancel this game? Players will no longer be able to join or continue, and this releases the Home screen lock.")) {
+      return;
+    }
+    if (state) {
+      await setGame(code, { ...state, phase: "final" });
+    }
+    onExit();
+  }
+
   if (stage === "setup") {
     return <HostSetup questions={questions} setQuestions={setQuestions} onCreate={createGame} onExit={onExit} />;
   }
   if (stage === "lobby") {
-    return <HostLobby code={code} players={players} onStart={startGame} count={players.length} />;
+    return <HostLobby code={code} players={players} onStart={startGame} count={players.length} onCancel={cancelGame} />;
   }
   if (stage === "question") {
     return (
@@ -236,12 +247,20 @@ function HostApp({ onExit }) {
         answeredCount={players.filter((p) => p.answers && p.answers[state.currentIndex]).length}
         totalPlayers={players.length}
         onTimeUp={revealQuestion}
+        onCancel={cancelGame}
       />
     );
   }
   if (stage === "reveal") {
     return (
-      <HostReveal q={questions[state.currentIndex]} index={state.currentIndex} total={questions.length} players={players} onNext={nextQuestion} />
+      <HostReveal
+        q={questions[state.currentIndex]}
+        index={state.currentIndex}
+        total={questions.length}
+        players={players}
+        onNext={nextQuestion}
+        onCancel={cancelGame}
+      />
     );
   }
   if (stage === "final") {
@@ -442,7 +461,7 @@ function JoinQRCode({ code }) {
   );
 }
 
-function HostLobby({ code, players, onStart, count }) {
+function HostLobby({ code, players, onStart, count, onCancel }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       <p className="text-[#9CA3C4] mb-2 text-sm tracking-wide uppercase">Game PIN</p>
@@ -471,9 +490,13 @@ function HostLobby({ code, players, onStart, count }) {
       <button
         onClick={onStart}
         disabled={count === 0}
-        className="flex items-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-8 py-4 rounded-2xl disabled:opacity-30 hover:brightness-105 active:scale-[0.98] transition"
+        className="flex items-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-8 py-4 rounded-2xl disabled:opacity-30 hover:brightness-105 active:scale-[0.98] transition mb-4"
       >
         <Play size={20} fill="#12172B" /> Start game
+      </button>
+
+      <button onClick={onCancel} className="text-[#9CA3C4] text-sm hover:text-[#E4572E] transition">
+        Cancel game
       </button>
     </div>
   );
@@ -517,7 +540,7 @@ function CountdownRing({ fraction, size = 64 }) {
   );
 }
 
-function HostQuestion({ q, index, total, startTime, duration, answeredCount, totalPlayers, onTimeUp }) {
+function HostQuestion({ q, index, total, startTime, duration, answeredCount, totalPlayers, onTimeUp, onCancel }) {
   const remaining = useCountdown(startTime, duration, onTimeUp);
   const fraction = remaining / duration;
   const secs = Math.ceil(remaining / 1000);
@@ -526,9 +549,14 @@ function HostQuestion({ q, index, total, startTime, duration, answeredCount, tot
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">
       <div className="flex items-center justify-between mb-6">
         <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} / {total}</span>
-        <div className="relative flex items-center justify-center">
-          <CountdownRing fraction={fraction} />
-          <span className="absolute font-display font-700 text-sm">{secs}</span>
+        <div className="flex items-center gap-4">
+          <div className="relative flex items-center justify-center">
+            <CountdownRing fraction={fraction} />
+            <span className="absolute font-display font-700 text-sm">{secs}</span>
+          </div>
+          <button onClick={onCancel} title="End game" className="text-[#6B7299] hover:text-[#E4572E] transition">
+            <X size={20} />
+          </button>
         </div>
       </div>
 
@@ -558,14 +586,19 @@ function HostQuestion({ q, index, total, startTime, duration, answeredCount, tot
   );
 }
 
-function HostReveal({ q, index, total, players, onNext }) {
+function HostReveal({ q, index, total, players, onNext, onCancel }) {
   const counts = SHAPES.map((_, i) => players.filter((p) => p.answers?.[index]?.choice === i).length);
   const maxCount = Math.max(1, ...counts);
   const podium = players.slice(0, 5);
 
   return (
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">
-      <span className="text-[#9CA3C4] text-sm font-medium mb-2">Question {index + 1} / {total} · Results</span>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} / {total} · Results</span>
+        <button onClick={onCancel} title="End game" className="text-[#6B7299] hover:text-[#E4572E] transition">
+          <X size={20} />
+        </button>
+      </div>
       <div className="flex items-center gap-3 mb-6">
         {q.image && <img src={q.image} alt="" className="w-14 h-14 rounded-xl object-cover border border-[#2A3058] flex-shrink-0" />}
         <h2 className="font-display font-700 text-2xl">{q.text}</h2>
