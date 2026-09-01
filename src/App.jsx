@@ -14,6 +14,8 @@ import {
   Clock,
   Image as ImageIcon,
   X,
+  Crown,
+  Medal,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { db } from "./firebase";
@@ -160,12 +162,46 @@ function Home({ onPick }) {
    HOST
    ============================================================ */
 
+const HOST_CODE_KEY = "quizclash_host_code";
+const PHASE_TO_STAGE = { lobby: "lobby", question: "question", reveal: "reveal", final: "final" };
+
 function HostApp({ onExit }) {
   const [stage, setStage] = useState("setup");
-  const [code] = useState(genCode);
+  const [code, setCode] = useState(() => localStorage.getItem(HOST_CODE_KEY) || genCode());
   const [questions, setQuestions] = useState(SAMPLE_QUIZ);
   const [state, setState] = useState(null);
   const [players, setPlayers] = useState([]);
+  const [resuming, setResuming] = useState(true);
+
+  // On mount, check if this browser was already hosting a game (e.g. before
+  // a refresh) and reconnect to it instead of starting a brand new one.
+  useEffect(() => {
+    let cancelled = false;
+    async function tryResume() {
+      const savedCode = localStorage.getItem(HOST_CODE_KEY);
+      if (!savedCode) {
+        setResuming(false);
+        return;
+      }
+      const snap = await getDoc(gameRef(savedCode));
+      if (cancelled) return;
+      if (!snap.exists() || snap.data().phase === "final") {
+        localStorage.removeItem(HOST_CODE_KEY);
+        setResuming(false);
+        return;
+      }
+      const data = snap.data();
+      setCode(savedCode);
+      setState(data);
+      setQuestions(data.questions || SAMPLE_QUIZ);
+      setStage(PHASE_TO_STAGE[data.phase] || "setup");
+      setResuming(false);
+    }
+    tryResume();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (stage === "setup") return;
@@ -187,6 +223,7 @@ function HostApp({ onExit }) {
       createdAt: Date.now(),
     };
     await setGame(code, initial, false);
+    localStorage.setItem(HOST_CODE_KEY, code);
     setState(initial);
     setStage("lobby");
   }
@@ -210,6 +247,7 @@ function HostApp({ onExit }) {
     if (ni >= questions.length) {
       const next = { ...state, phase: "final" };
       await setGame(code, next);
+      localStorage.removeItem(HOST_CODE_KEY);
       setState(next);
       setStage("final");
       return;
@@ -227,7 +265,16 @@ function HostApp({ onExit }) {
     if (state) {
       await setGame(code, { ...state, phase: "final" });
     }
+    localStorage.removeItem(HOST_CODE_KEY);
     onExit();
+  }
+
+  if (resuming) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <p className="text-[#9CA3C4] text-sm">Reconnecting…</p>
+      </div>
+    );
   }
 
   if (stage === "setup") {
@@ -502,17 +549,53 @@ function HostLobby({ code, players, onStart, count, onCancel }) {
   );
 }
 
+const MEDAL_COLORS = ["#F3A712", "#C7CCE0", "#CD8B4E"]; // gold, silver, bronze
+
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function rankLabel(rank) {
+  if (rank === 1) return "1st";
+  if (rank === 2) return "Runner-up";
+  if (rank === 3) return "3rd";
+  return ordinal(rank);
+}
+
+function RankBadge({ rank, size = 22 }) {
+  if (rank === 1) return <Crown size={size} color={MEDAL_COLORS[0]} fill={MEDAL_COLORS[0]} />;
+  if (rank === 2) return <Medal size={size} color={MEDAL_COLORS[1]} fill={MEDAL_COLORS[1]} />;
+  if (rank === 3) return <Medal size={size} color={MEDAL_COLORS[2]} fill={MEDAL_COLORS[2]} />;
+  return (
+    <span
+      style={{ width: size, height: size }}
+      className="flex items-center justify-center rounded-full bg-[#2A3058] text-[10px] font-display text-[#9CA3C4] flex-shrink-0"
+    >
+      {rank}
+    </span>
+  );
+}
+
 function useCountdown(startTime, duration, onDone) {
   const [remaining, setRemaining] = useState(duration);
+  const firedRef = useRef(false);
   useEffect(() => {
+    firedRef.current = false;
     if (!startTime) return;
+    let id;
     const tick = () => {
       const left = Math.max(0, duration - (Date.now() - startTime));
       setRemaining(left);
-      if (left <= 0) onDone && onDone();
+      if (left <= 0 && !firedRef.current) {
+        firedRef.current = true;
+        clearInterval(id);
+        onDone && onDone();
+      }
     };
     tick();
-    const id = setInterval(tick, 200);
+    id = setInterval(tick, 200);
     return () => clearInterval(id);
   }, [startTime, duration]);
   return remaining;
@@ -544,6 +627,18 @@ function HostQuestion({ q, index, total, startTime, duration, answeredCount, tot
   const remaining = useCountdown(startTime, duration, onTimeUp);
   const fraction = remaining / duration;
   const secs = Math.ceil(remaining / 1000);
+  const endedRef = useRef(false);
+
+  useEffect(() => {
+    endedRef.current = false;
+  }, [index]);
+
+  useEffect(() => {
+    if (!endedRef.current && totalPlayers > 0 && answeredCount >= totalPlayers) {
+      endedRef.current = true;
+      onTimeUp();
+    }
+  }, [answeredCount, totalPlayers]);
 
   return (
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">
@@ -629,8 +724,9 @@ function HostReveal({ q, index, total, players, onNext, onCancel }) {
         </div>
         <div className="flex flex-col gap-2">
           {podium.map((p, i) => (
-            <div key={p.id} className="flex items-center justify-between text-sm">
-              <span className="text-[#F5F3EE]">{i + 1}. {p.name}</span>
+            <div key={p.id} className="flex items-center gap-3 text-sm">
+              <RankBadge rank={i + 1} size={18} />
+              <span className="flex-1 text-[#F5F3EE]">{p.name}</span>
               <span className="text-[#9CA3C4] font-display">{p.score}</span>
             </div>
           ))}
@@ -650,22 +746,37 @@ function HostReveal({ q, index, total, players, onNext, onCancel }) {
 
 function FinalLeaderboard({ players, onExit, isHost }) {
   const ranked = [...players].sort((a, b) => b.score - a.score);
-  const medalColor = ["#F3A712", "#9CA3C4", "#B08050"];
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       <Trophy size={40} color="#F3A712" className="mb-3" />
       <h1 className="font-display font-700 text-3xl mb-8">Final results</h1>
       <div className="w-full max-w-md flex flex-col gap-2 mb-10">
-        {ranked.map((p, i) => (
-          <div
-            key={p.id}
-            className="pop-in flex items-center justify-between rounded-xl px-4 py-3"
-            style={{ backgroundColor: i < 3 ? "#1B2140" : "#161B36", borderLeft: i < 3 ? `4px solid ${medalColor[i]}` : "4px solid transparent" }}
-          >
-            <span className="font-medium">{i + 1}. {p.name}</span>
-            <span className="font-display text-[#F3A712]">{p.score}</span>
-          </div>
-        ))}
+        {ranked.map((p, i) => {
+          const rank = i + 1;
+          const isPodium = rank <= 3;
+          return (
+            <div
+              key={p.id}
+              className="pop-in flex items-center gap-3 rounded-xl px-4 py-3"
+              style={{
+                backgroundColor: isPodium ? "#1B2140" : "#161B36",
+                borderLeft: isPodium ? `4px solid ${MEDAL_COLORS[i]}` : "4px solid transparent",
+              }}
+            >
+              <RankBadge rank={rank} size={26} />
+              <span className="flex-1 font-medium">{p.name}</span>
+              {isPodium && (
+                <span
+                  className="text-[10px] uppercase tracking-wide px-2 py-1 rounded-full font-display font-700 flex-shrink-0"
+                  style={{ backgroundColor: MEDAL_COLORS[i], color: "#12172B" }}
+                >
+                  {rankLabel(rank)}
+                </span>
+              )}
+              <span className="font-display text-[#F3A712] flex-shrink-0">{p.score}</span>
+            </div>
+          );
+        })}
         {ranked.length === 0 && <span className="text-[#6B7299] text-sm italic text-center">No players</span>}
       </div>
       <button onClick={onExit} className="text-[#9CA3C4] text-sm underline">
