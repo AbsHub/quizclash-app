@@ -14,6 +14,7 @@ import {
   Clock,
   Image as ImageIcon,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { db } from "./firebase";
 import {
   doc,
@@ -21,6 +22,9 @@ import {
   getDoc,
   onSnapshot,
   collection,
+  query,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 
 /* ---------------------------------------------------------
@@ -40,6 +44,7 @@ const SHAPES = [
 
 const DEFAULT_DURATION = 20; // seconds
 const TIMER_PRESETS = [5, 10, 20, 30, 60, 90];
+const STALE_LOCK_MS = 30 * 60 * 1000; // treat an abandoned game as unlocked after 30 minutes
 
 const SAMPLE_QUIZ = [
   { text: "Which planet is known as the Red Planet?", choices: ["Venus", "Mars", "Jupiter", "Saturn"], correct: 1, duration: 20, image: "" },
@@ -79,18 +84,42 @@ async function setPlayer(code, id, data, merge = true) {
 /* ---------------------------- Shell ---------------------------- */
 
 export default function QuizClash() {
-  const [role, setRole] = useState(null); // 'host' | 'player'
+  const initialJoinCode = React.useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("join") || "";
+  }, []);
+  const [role, setRole] = useState(initialJoinCode ? "player" : null); // 'host' | 'player'
 
   return (
     <div className="min-h-screen w-full bg-[#12172B] text-[#F5F3EE] font-sans overflow-hidden">
       {!role && <Home onPick={setRole} />}
       {role === "host" && <HostApp onExit={() => setRole(null)} />}
-      {role === "player" && <PlayerApp onExit={() => setRole(null)} />}
+      {role === "player" && <PlayerApp onExit={() => setRole(null)} initialCode={initialJoinCode} />}
     </div>
   );
 }
 
 function Home({ onPick }) {
+  const [activeGame, setActiveGame] = useState(null);
+
+  useEffect(() => {
+    const q = query(collection(db, "games"), orderBy("createdAt", "desc"), limit(1));
+    const unsub = onSnapshot(q, (snap) => {
+      if (snap.empty) {
+        setActiveGame(null);
+        return;
+      }
+      const d = snap.docs[0];
+      const data = d.data();
+      const isStale = Date.now() - (data.createdAt || 0) > STALE_LOCK_MS;
+      const isLive = data.phase !== "final" && !isStale;
+      setActiveGame(isLive ? { code: d.id, ...data } : null);
+    });
+    return unsub;
+  }, []);
+
+  const hostDisabled = !!activeGame;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       <div className="flex items-center gap-2 mb-2 text-[#F3A712]">
@@ -100,17 +129,23 @@ function Home({ onPick }) {
       <p className="text-[#9CA3C4] mb-10 text-center max-w-sm">
         Live quiz games. One big screen, everyone else on their phone.
       </p>
-      <div className="flex flex-col gap-4 w-full max-w-xs">
+      <div className="flex flex-col gap-3 w-full max-w-xs">
         <button
-          onClick={() => onPick("host")}
-          className="group flex items-center justify-between gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
+          onClick={() => !hostDisabled && onPick("host")}
+          disabled={hostDisabled}
+          className="group flex items-center justify-between gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
         >
           Host a game
           <Play size={20} fill="#12172B" />
         </button>
+        {hostDisabled && (
+          <p className="text-xs text-[#9CA3C4] text-center -mt-1 px-2">
+            A game is already in progress (PIN {activeGame.code}). Join it below, or wait for it to finish.
+          </p>
+        )}
         <button
           onClick={() => onPick("player")}
-          className="flex items-center justify-between gap-3 bg-transparent border-2 border-[#3A4066] text-[#F5F3EE] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:border-[#F5F3EE] active:scale-[0.98] transition"
+          className="flex items-center justify-between gap-3 bg-transparent border-2 border-[#3A4066] text-[#F5F3EE] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:border-[#F5F3EE] active:scale-[0.98] transition mt-1"
         >
           Join a game
           <ArrowRight size={20} />
@@ -385,12 +420,39 @@ function HostSetup({ questions, setQuestions, onCreate, onExit }) {
   );
 }
 
+function JoinQRCode({ code }) {
+  const [dataUrl, setDataUrl] = useState(null);
+
+  useEffect(() => {
+    const joinUrl = `${window.location.origin}${window.location.pathname}?join=${code}`;
+    QRCode.toDataURL(joinUrl, {
+      width: 220,
+      margin: 1,
+      color: { dark: "#12172B", light: "#FFFFFF" },
+    })
+      .then(setDataUrl)
+      .catch(() => setDataUrl(null));
+  }, [code]);
+
+  if (!dataUrl) return null;
+  return (
+    <div className="bg-white rounded-2xl p-3 mb-6 pop-in">
+      <img src={dataUrl} alt="Scan to join" width={160} height={160} className="block" />
+    </div>
+  );
+}
+
 function HostLobby({ code, players, onStart, count }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       <p className="text-[#9CA3C4] mb-2 text-sm tracking-wide uppercase">Game PIN</p>
-      <div className="font-display font-700 text-6xl sm:text-7xl tracking-widest mb-8 text-[#F5F3EE]">{code}</div>
-      <p className="text-[#9CA3C4] mb-6 text-sm">Players open quizclash.yourdomain.com → Join a game → enter this PIN</p>
+      <div className="font-display font-700 text-6xl sm:text-7xl tracking-widest mb-6 text-[#F5F3EE]">{code}</div>
+
+      <JoinQRCode code={code} />
+
+      <p className="text-[#9CA3C4] mb-6 text-sm text-center max-w-xs">
+        Scan the code, or open the site and enter the PIN above.
+      </p>
 
       <div className="w-full max-w-md bg-[#1B2140] rounded-2xl p-5 mb-8 min-h-[100px]">
         <div className="flex items-center gap-2 text-[#9CA3C4] text-sm mb-3">
@@ -584,8 +646,8 @@ function FinalLeaderboard({ players, onExit, isHost }) {
    PLAYER
    ============================================================ */
 
-function PlayerApp({ onExit }) {
-  const [code, setCode] = useState("");
+function PlayerApp({ onExit, initialCode = "" }) {
+  const [code, setCode] = useState(initialCode);
   const [name, setName] = useState("");
   const [joined, setJoined] = useState(false);
   const [id] = useState(genId);
@@ -661,6 +723,7 @@ function PlayerApp({ onExit }) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Nickname"
             maxLength={18}
+            autoFocus={!!initialCode}
             className="bg-[#1B2140] rounded-xl px-4 py-3 text-center outline-none border-2 border-[#2A3058] focus:border-[#F3A712]"
           />
           {error && <p className="text-[#E4572E] text-sm text-center">{error}</p>}
