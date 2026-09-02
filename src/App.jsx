@@ -16,6 +16,7 @@ import {
   X,
   Crown,
   Medal,
+  Library,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { db } from "./firebase";
@@ -28,6 +29,8 @@ import {
   query,
   orderBy,
   limit,
+  addDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
 /* ---------------------------------------------------------
@@ -346,6 +349,107 @@ function TimerChips({ value, onChange }) {
   );
 }
 
+function QuizBankPanel({ onLoad, currentQuestions }) {
+  const [quizzes, setQuizzes] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [categoryInput, setCategoryInput] = useState("");
+
+  useEffect(() => {
+    const q = query(collection(db, "quizzes"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setQuizzes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, []);
+
+  async function handleSave() {
+    if (!nameInput.trim()) return;
+    await addDoc(collection(db, "quizzes"), {
+      name: nameInput.trim(),
+      category: categoryInput.trim(),
+      questions: currentQuestions,
+      createdAt: Date.now(),
+    });
+    setNameInput("");
+    setCategoryInput("");
+    setSaving(false);
+  }
+
+  async function handleDelete(id, name) {
+    if (!window.confirm(`Delete "${name}" from the quiz bank? This can't be undone.`)) return;
+    await deleteDoc(doc(db, "quizzes", id));
+  }
+
+  function handleLoad(qz) {
+    if (!window.confirm(`Load "${qz.name}"? This replaces the questions you're currently editing.`)) return;
+    onLoad(qz.questions);
+  }
+
+  return (
+    <div className="bg-[#1B2140] rounded-2xl p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-sm text-[#D8DCF2]">
+          <Library size={16} className="text-[#F3A712]" /> Quiz bank
+        </div>
+        <button onClick={() => setSaving((s) => !s)} className="text-xs text-[#F3A712] font-medium">
+          {saving ? "Cancel" : "Save current as…"}
+        </button>
+      </div>
+
+      {saving && (
+        <div className="flex flex-col gap-2 mb-3">
+          <input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder="Quiz name (e.g. Geography)"
+            className="bg-[#12172B] rounded-lg px-3 py-2 text-sm outline-none border border-[#2A3058] focus:border-[#F3A712]"
+          />
+          <input
+            value={categoryInput}
+            onChange={(e) => setCategoryInput(e.target.value)}
+            placeholder="Category (optional, e.g. Team night)"
+            className="bg-[#12172B] rounded-lg px-3 py-2 text-sm outline-none border border-[#2A3058] focus:border-[#F3A712]"
+          />
+          <button
+            onClick={handleSave}
+            disabled={!nameInput.trim()}
+            className="bg-[#F3A712] text-[#12172B] font-display font-600 text-sm py-2 rounded-lg disabled:opacity-30"
+          >
+            Save {currentQuestions.length} question{currentQuestions.length === 1 ? "" : "s"}
+          </button>
+        </div>
+      )}
+
+      {quizzes.length === 0 ? (
+        <p className="text-xs text-[#6B7299] italic">No saved quizzes yet — build one below and save it here.</p>
+      ) : (
+        <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+          {quizzes.map((qz) => (
+            <div key={qz.id} className="flex items-center justify-between gap-2 bg-[#12172B] rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-sm text-[#F5F3EE] truncate">{qz.name}</p>
+                <p className="text-xs text-[#6B7299]">
+                  {qz.category ? `${qz.category} · ` : ""}
+                  {qz.questions?.length || 0} questions
+                </p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <button onClick={() => handleLoad(qz)} className="text-xs text-[#F3A712] font-medium">
+                  Load
+                </button>
+                <button onClick={() => handleDelete(qz.id, qz.name)} className="text-[#6B7299] hover:text-[#E4572E]">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HostSetup({ questions, setQuestions, onCreate, onExit }) {
   const [editing, setEditing] = useState(false);
   const [defaultDuration, setDefaultDuration] = useState(DEFAULT_DURATION);
@@ -373,6 +477,8 @@ function HostSetup({ questions, setQuestions, onCreate, onExit }) {
       <p className="text-[#9CA3C4] mb-6 text-sm">
         {editing ? "Edit the questions below, or keep the sample set." : `${questions.length} questions ready to go.`}
       </p>
+
+      <QuizBankPanel onLoad={setQuestions} currentQuestions={questions} />
 
       <div className="bg-[#1B2140] rounded-2xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-sm text-[#D8DCF2]">
