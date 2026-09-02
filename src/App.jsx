@@ -9,8 +9,6 @@ import {
   Plus,
   Trash2,
   Trophy,
-  Zap,
-  ArrowRight,
   Clock,
   Image as ImageIcon,
   X,
@@ -128,21 +126,30 @@ function Home({ onPick }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
-      <div className="flex items-center gap-2 mb-2 text-[#F3A712]">
-        <Zap size={28} strokeWidth={2.5} />
-        <span className="font-display font-700 text-3xl tracking-tight">QuizClash</span>
+      <div className="flex items-center gap-3 mb-5">
+        {SHAPES.map((s, i) => (
+          <s.Icon
+            key={s.label}
+            size={16}
+            color={s.color}
+            fill={s.color}
+            className="pop-in"
+            style={{ animationDelay: `${i * 90}ms` }}
+          />
+        ))}
       </div>
-      <p className="text-[#9CA3C4] mb-10 text-center max-w-sm">
+      <h1 className="font-display font-700 text-5xl sm:text-6xl tracking-tight mb-3 text-center">QuizClash</h1>
+      <p className="text-[#9CA3C4] mb-10 text-center max-w-xs">
         Live quiz games. One big screen, everyone else on their phone.
       </p>
       <div className="flex flex-col gap-3 w-full max-w-xs">
         <button
           onClick={() => !hostDisabled && onPick("host")}
           disabled={hostDisabled}
-          className="group flex items-center justify-between gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
+          className="flex items-center justify-center gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
         >
+          <Triangle size={18} color="#12172B" fill="#12172B" />
           Host a game
-          <Play size={20} fill="#12172B" />
         </button>
         {hostDisabled && (
           <p className="text-xs text-[#9CA3C4] text-center -mt-1 px-2">
@@ -151,10 +158,10 @@ function Home({ onPick }) {
         )}
         <button
           onClick={() => onPick("player")}
-          className="flex items-center justify-between gap-3 bg-transparent border-2 border-[#3A4066] text-[#F5F3EE] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:border-[#F5F3EE] active:scale-[0.98] transition mt-1"
+          className="flex items-center justify-center gap-3 bg-transparent border-2 border-[#3A4066] text-[#F5F3EE] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:border-[#F5F3EE] active:scale-[0.98] transition mt-1"
         >
+          <Diamond size={18} color="#F5F3EE" fill="#F5F3EE" />
           Join a game
-          <ArrowRight size={20} />
         </button>
       </div>
     </div>
@@ -617,8 +624,13 @@ function JoinQRCode({ code }) {
 function HostLobby({ code, players, onStart, count, onCancel }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
-      <p className="text-[#9CA3C4] mb-2 text-sm tracking-wide uppercase">Game PIN</p>
-      <div className="font-display font-700 text-6xl sm:text-7xl tracking-widest mb-6 text-[#F5F3EE]">{code}</div>
+      <div className="flex items-center gap-2 mb-4">
+        {SHAPES.map((s) => (
+          <s.Icon key={s.label} size={12} color={s.color} fill={s.color} />
+        ))}
+      </div>
+      <div className="font-display font-700 text-6xl sm:text-7xl tracking-widest mb-1 text-[#F5F3EE]">{code}</div>
+      <p className="text-[#9CA3C4] mb-6 text-sm">Your game PIN</p>
 
       <JoinQRCode code={code} />
 
@@ -631,11 +643,18 @@ function HostLobby({ code, players, onStart, count, onCancel }) {
           <Users size={16} /> {count} joined
         </div>
         <div className="flex flex-wrap gap-2">
-          {players.map((p) => (
-            <span key={p.id} className="pop-in bg-[#2A3058] rounded-full px-3 py-1.5 text-sm text-[#F5F3EE]">
-              {p.name}
-            </span>
-          ))}
+          {players.map((p, i) => {
+            const color = SHAPES[i % SHAPES.length].color;
+            return (
+              <span
+                key={p.id}
+                className="pop-in rounded-full px-3 py-1.5 text-sm font-medium"
+                style={{ backgroundColor: `${color}22`, color, border: `1px solid ${color}55` }}
+              >
+                {p.name}
+              </span>
+            );
+          })}
           {count === 0 && <span className="text-[#6B7299] text-sm italic">Waiting for players…</span>}
         </div>
       </div>
@@ -749,7 +768,7 @@ function HostQuestion({ q, index, total, startTime, duration, answeredCount, tot
   return (
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">
       <div className="flex items-center justify-between mb-6">
-        <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} / {total}</span>
+        <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} of {total}</span>
         <div className="flex items-center gap-4">
           <div className="relative flex items-center justify-center">
             <CountdownRing fraction={fraction} />
@@ -795,7 +814,7 @@ function HostReveal({ q, index, total, players, onNext, onCancel }) {
   return (
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} / {total} · Results</span>
+        <span className="text-[#9CA3C4] text-sm font-medium">Question {index + 1} of {total}</span>
         <button onClick={onCancel} title="End game" className="text-[#6B7299] hover:text-[#E4572E] transition">
           <X size={20} />
         </button>
@@ -844,7 +863,7 @@ function HostReveal({ q, index, total, players, onNext, onCancel }) {
         onClick={onNext}
         className="max-w-md w-full mx-auto flex items-center justify-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
       >
-        {index + 1 >= total ? "See final results" : "Next question"} <ArrowRight size={20} />
+        {index + 1 >= total ? "See final results" : "Next question"}
       </button>
     </div>
   );
@@ -873,7 +892,7 @@ function FinalLeaderboard({ players, onExit, isHost }) {
               <span className="flex-1 font-medium">{p.name}</span>
               {isPodium && (
                 <span
-                  className="text-[10px] uppercase tracking-wide px-2 py-1 rounded-full font-display font-700 flex-shrink-0"
+                  className="text-xs px-2 py-1 rounded-full font-display font-700 flex-shrink-0"
                   style={{ backgroundColor: MEDAL_COLORS[i], color: "#12172B" }}
                 >
                   {rankLabel(rank)}
@@ -956,10 +975,12 @@ function PlayerApp({ onExit, initialCode = "" }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in relative">
         <button onClick={onExit} className="absolute top-6 left-6 text-[#9CA3C4] text-sm">← Back</button>
-        <div className="flex items-center gap-2 mb-8 text-[#F3A712]">
-          <Zap size={24} strokeWidth={2.5} />
-          <span className="font-display font-700 text-2xl">QuizClash</span>
+        <div className="flex items-center gap-2.5 mb-3">
+          {SHAPES.map((s) => (
+            <s.Icon key={s.label} size={13} color={s.color} fill={s.color} />
+          ))}
         </div>
+        <h1 className="font-display font-700 text-2xl mb-8">QuizClash</h1>
         <div className="w-full max-w-xs flex flex-col gap-3">
           <input
             value={code}
