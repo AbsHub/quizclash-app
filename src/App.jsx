@@ -748,22 +748,34 @@ function CountdownRing({ fraction, size = 64 }) {
   );
 }
 
+const MIN_QUESTION_MS = 6000; // keep every question up at least this long, even if everyone's answered,
+// so devices on a slower connection still have time to receive and see the question
+
 function HostQuestion({ q, index, total, startTime, duration, answeredCount, totalPlayers, onTimeUp, onCancel }) {
-  const remaining = useCountdown(startTime, duration, onTimeUp);
-  const fraction = remaining / duration;
-  const secs = Math.ceil(remaining / 1000);
   const endedRef = useRef(false);
 
   useEffect(() => {
     endedRef.current = false;
   }, [index]);
 
+  const triggerEnd = useCallback(() => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    onTimeUp();
+  }, [onTimeUp]);
+
+  const remaining = useCountdown(startTime, duration, triggerEnd);
+  const fraction = remaining / duration;
+  const secs = Math.ceil(remaining / 1000);
+
   useEffect(() => {
-    if (!endedRef.current && totalPlayers > 0 && answeredCount >= totalPlayers) {
-      endedRef.current = true;
-      onTimeUp();
-    }
-  }, [answeredCount, totalPlayers]);
+    if (endedRef.current) return;
+    if (!(totalPlayers > 0 && answeredCount >= totalPlayers)) return;
+    const elapsed = Date.now() - startTime;
+    const waitMore = Math.max(0, MIN_QUESTION_MS - elapsed);
+    const timer = setTimeout(triggerEnd, waitMore);
+    return () => clearTimeout(timer);
+  }, [answeredCount, totalPlayers, startTime, triggerEnd]);
 
   return (
     <div className="min-h-screen flex flex-col px-6 py-8 rise-in">

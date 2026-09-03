@@ -13,4 +13,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, });
+
+// Some office/guest/venue WiFi (firewalls, proxies) blocks the persistent
+// streaming connection Firestore normally uses for real-time updates.
+// This auto-detects that case and falls back to long-polling, which is far
+// more firewall-friendly — critical for events on unpredictable WiFi.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
