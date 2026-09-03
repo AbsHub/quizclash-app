@@ -173,15 +173,38 @@ function Home({ onPick }) {
    ============================================================ */
 
 const HOST_CODE_KEY = "quizclash_host_code";
+const DRAFT_QUESTIONS_KEY = "quizclash_draft_questions";
 const PHASE_TO_STAGE = { lobby: "lobby", question: "question", reveal: "reveal", final: "final" };
+
+function loadDraftQuestions() {
+  try {
+    const raw = localStorage.getItem(DRAFT_QUESTIONS_KEY);
+    if (!raw) return SAMPLE_QUIZ;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    return SAMPLE_QUIZ;
+  } catch {
+    return SAMPLE_QUIZ;
+  }
+}
 
 function HostApp({ onExit }) {
   const [stage, setStage] = useState("setup");
   const [code, setCode] = useState(() => localStorage.getItem(HOST_CODE_KEY) || genCode());
-  const [questions, setQuestions] = useState(SAMPLE_QUIZ);
+  const [questions, setQuestions] = useState(loadDraftQuestions);
   const [state, setState] = useState(null);
   const [players, setPlayers] = useState([]);
   const [resuming, setResuming] = useState(true);
+
+  // Auto-save the in-progress question edits (including image URLs) so they
+  // survive a refresh or navigating away, without needing an explicit save.
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_QUESTIONS_KEY, JSON.stringify(questions));
+    } catch {
+      // ignore — worst case, the draft just doesn't persist this time
+    }
+  }, [questions]);
 
   // On mount, check if this browser was already hosting a game (e.g. before
   // a refresh) and reconnect to it instead of starting a brand new one.
@@ -473,6 +496,10 @@ function HostSetup({ questions, setQuestions, onCreate, onExit }) {
   function removeQuestion(i) {
     setQuestions((qs) => qs.filter((_, idx) => idx !== i));
   }
+  function resetToSample() {
+    if (!window.confirm("Replace your current questions with the sample quiz? This can't be undone.")) return;
+    setQuestions(SAMPLE_QUIZ);
+  }
   function applyTimerToAll() {
     setQuestions((qs) => qs.map((q) => ({ ...q, duration: defaultDuration })));
   }
@@ -514,9 +541,14 @@ function HostSetup({ questions, setQuestions, onCreate, onExit }) {
               </span>
             </div>
           ))}
-          <button onClick={() => setEditing(true)} className="text-[#F3A712] text-sm font-medium text-left mt-1">
-            Edit questions →
-          </button>
+          <div className="flex items-center gap-4 mt-1">
+            <button onClick={() => setEditing(true)} className="text-[#F3A712] text-sm font-medium">
+              Edit questions →
+            </button>
+            <button onClick={resetToSample} className="text-[#6B7299] text-sm hover:text-[#E4572E] transition">
+              Reset to sample
+            </button>
+          </div>
         </div>
       )}
 
