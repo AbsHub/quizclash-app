@@ -43,3 +43,33 @@ body,
 .rise-in {
   animation: riseIn 0.35s ease-out both;
 }
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0) rotate(-12deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+.bounce-in {
+  animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Chunky, tactile "pressed" feel for primary buttons and answer tiles */
+.press-btn {
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.press-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+.press-btn:disabled {
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+}

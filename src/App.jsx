@@ -46,6 +46,27 @@ const SHAPES = [
   { Icon: Square, color: "#4C9A6A", label: "Square" },
 ];
 
+const CORRECT_REACTIONS = [
+  { emoji: "🎉", caption: "Nailed it!" },
+  { emoji: "🔥", caption: "On fire!" },
+  { emoji: "⚡", caption: "Lightning fast!" },
+  { emoji: "🌟", caption: "Star player!" },
+  { emoji: "🚀", caption: "Blast off!" },
+  { emoji: "🏆", caption: "Champion move!" },
+  { emoji: "💪", caption: "Crushed it!" },
+];
+const WRONG_REACTIONS = [
+  { emoji: "😅", caption: "So close!" },
+  { emoji: "🙈", caption: "Not quite!" },
+  { emoji: "👀", caption: "Nice try!" },
+  { emoji: "🤔", caption: "Almost!" },
+  { emoji: "💫", caption: "Better luck next one!" },
+];
+function pickReaction(correct) {
+  const pool = correct ? CORRECT_REACTIONS : WRONG_REACTIONS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 const DEFAULT_DURATION = 20; // seconds
 const TIMER_PRESETS = [5, 10, 20, 30, 60, 90];
 const STALE_LOCK_MS = 30 * 60 * 1000; // treat an abandoned game as unlocked after 30 minutes
@@ -146,7 +167,7 @@ function Home({ onPick }) {
         <button
           onClick={() => !hostDisabled && onPick("host")}
           disabled={hostDisabled}
-          className="flex items-center justify-center gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
+          className="press-btn flex items-center justify-center gap-3 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-6 py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
         >
           <Triangle size={18} color="#12172B" fill="#12172B" />
           Host a game
@@ -694,7 +715,7 @@ function HostLobby({ code, players, onStart, count, onCancel }) {
       <button
         onClick={onStart}
         disabled={count === 0}
-        className="flex items-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-8 py-4 rounded-2xl disabled:opacity-30 hover:brightness-105 active:scale-[0.98] transition mb-4"
+        className="press-btn flex items-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg px-8 py-4 rounded-2xl disabled:opacity-30 hover:brightness-105 active:scale-[0.98] transition mb-4"
       >
         <Play size={20} fill="#12172B" /> Start game
       </button>
@@ -905,7 +926,7 @@ function HostReveal({ q, index, total, players, onNext, onCancel }) {
 
       <button
         onClick={onNext}
-        className="max-w-md w-full mx-auto flex items-center justify-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
+        className="press-btn max-w-md w-full mx-auto flex items-center justify-center gap-2 bg-[#F3A712] text-[#12172B] font-display font-700 text-lg py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
       >
         {index + 1 >= total ? "See final results" : "Next question"}
       </button>
@@ -1044,7 +1065,7 @@ function PlayerApp({ onExit, initialCode = "" }) {
           {error && <p className="text-[#E4572E] text-sm text-center">{error}</p>}
           <button
             onClick={handleJoin}
-            className="bg-[#F3A712] text-[#12172B] font-display font-700 text-lg py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
+            className="press-btn bg-[#F3A712] text-[#12172B] font-display font-700 text-lg py-4 rounded-2xl hover:brightness-105 active:scale-[0.98] transition"
           >
             Join
           </button>
@@ -1101,7 +1122,7 @@ function PlayerApp({ onExit, initialCode = "" }) {
             <button
               key={i}
               onClick={() => submitAnswer(i)}
-              className="active:scale-95 transition rounded-2xl flex flex-col items-center justify-center gap-2 aspect-square"
+              className="press-btn active:scale-95 transition rounded-2xl flex flex-col items-center justify-center gap-2 aspect-square"
               style={{ backgroundColor: s.color }}
             >
               <s.Icon size={36} color="#12172B" fill="#12172B" />
@@ -1113,14 +1134,14 @@ function PlayerApp({ onExit, initialCode = "" }) {
   }
 
   const correct = myAnswer?.correct;
+  const reaction = React.useMemo(() => (myAnswer ? pickReaction(correct) : null), [qi, myAnswer?.choice]);
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       {myAnswer ? (
         <>
-          <div className="pop-in w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: correct ? "#4C9A6A" : "#E4572E" }}>
-            <span className="font-display font-700 text-2xl">{correct ? "✓" : "✕"}</span>
-          </div>
-          <p className="font-display font-700 text-xl mb-1">{correct ? `+${myAnswer.points} points` : "No points"}</p>
+          <div className="bounce-in text-7xl mb-3">{reaction.emoji}</div>
+          <p className="font-display font-700 text-2xl mb-1">{reaction.caption}</p>
+          <p className="text-[#9CA3C4] text-sm mb-4">{correct ? `+${myAnswer.points} points` : "No points this time"}</p>
           <p className="text-[#9CA3C4] text-sm">Total score: {me?.score ?? 0}</p>
         </>
       ) : (
