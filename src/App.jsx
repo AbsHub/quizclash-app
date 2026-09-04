@@ -990,6 +990,7 @@ function PlayerApp({ onExit, initialCode = "" }) {
   const [me, setMe] = useState(null);
   const meRef = useRef(null);
   meRef.current = me;
+  const reactionCacheRef = useRef({});
 
   useEffect(() => {
     if (!joined) return;
@@ -1134,7 +1135,14 @@ function PlayerApp({ onExit, initialCode = "" }) {
   }
 
   const correct = myAnswer?.correct;
-  const reaction = React.useMemo(() => (myAnswer ? pickReaction(correct) : null), [qi, myAnswer?.choice]);
+  let reaction = null;
+  if (myAnswer) {
+    const cacheKey = `${qi}-${myAnswer.choice}`;
+    if (!reactionCacheRef.current[cacheKey]) {
+      reactionCacheRef.current[cacheKey] = pickReaction(correct);
+    }
+    reaction = reactionCacheRef.current[cacheKey];
+  }
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 rise-in">
       {myAnswer ? (
