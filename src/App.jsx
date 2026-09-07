@@ -852,8 +852,13 @@ function HostQuestion({ q, index, total, startTime, duration, answeredCount, tot
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-2 text-[#9CA3C4] text-sm mb-6">
-        <Users size={14} /> {answeredCount} / {totalPlayers} answered
+      <div className="flex items-center justify-center gap-3 text-[#9CA3C4] text-sm mb-6">
+        <span className="flex items-center gap-2">
+          <Users size={14} /> {answeredCount} / {totalPlayers} answered
+        </span>
+        <button onClick={triggerEnd} className="text-[#F3A712] font-medium hover:brightness-110 transition">
+          Skip to results
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 max-w-2xl w-full mx-auto">
